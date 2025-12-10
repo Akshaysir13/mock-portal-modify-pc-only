@@ -6,84 +6,131 @@ export default function MobileBlocker({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const checkMobile = () => {
-      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+      // User Agent Check
+      const userAgent = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
+      const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|crios|fxios|tablet|playbook|silk|kindle/i.test(userAgent);
       
-      // Check user agent for mobile keywords
-      const mobileKeywords = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS|FxiOS|Tablet|PlayBook|Silk|Kindle|ARM|Touch/i;
-      const isMobileUA = mobileKeywords.test(userAgent);
+      // Platform Check
+      const platform = (navigator.platform || '').toLowerCase();
+      const isMobilePlatform = /iphone|ipad|ipod|android|arm|pike|linux aarch/i.test(platform);
       
-      // Check platform
-      const platform = navigator.platform || '';
-      const mobilePlatforms = /iPhone|iPad|iPod|Android|Linux armv|Linux aarch/i;
-      const isMobilePlatform = mobilePlatforms.test(platform);
+      // Touch Support (more aggressive)
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || (navigator as any).msMaxTouchPoints > 0;
       
-      // Check touch points (mobile devices typically have more touch points)
-      const hasMobileTouch = navigator.maxTouchPoints > 1;
+      // Pointer Type - coarse means touch
+      const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      const isAnyCoarsePointer = window.matchMedia('(any-pointer: coarse)').matches;
       
-      // Check for orientation property (mobile-specific)
-      const hasOrientation = typeof window.orientation !== 'undefined';
-      
-      // Check screen dimensions (both width AND height to catch desktop view on mobile)
+      // Screen Size Detection (physical screen, not viewport)
       const screenWidth = window.screen.width;
       const screenHeight = window.screen.height;
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+      const availWidth = window.screen.availWidth;
+      const availHeight = window.screen.availHeight;
       
-      // Check actual screen size (not just viewport)
-      const smallScreen = screenWidth < 1024 || screenHeight < 600;
+      // Get the smaller dimension for portrait/landscape check
+      const minDimension = Math.min(screenWidth, screenHeight);
+      const maxDimension = Math.max(screenWidth, screenHeight);
       
-      // Check aspect ratio
-      const screenRatio = screenWidth / screenHeight;
-      const isMobileRatio = screenRatio < 0.7 || screenRatio > 1.5;
+      // Mobile screens are typically narrower than 768px in portrait
+      const hasSmallScreen = minDimension < 768 || maxDimension < 1024;
+      const hasSmallAvailScreen = availWidth < 768 || availHeight < 600;
       
-      // Check if viewport is significantly smaller than screen (desktop view on mobile)
-      const viewportMismatch = (screenWidth > 1024 && viewportWidth < 768) || 
-                               (screenHeight > 600 && viewportHeight < 500);
+      // Orientation API (mobile-specific)
+      const hasOrientationAPI = 'orientation' in window || 'onorientationchange' in window;
       
-      // Check for pointer type (coarse = touch device)
-      const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+      // Device Pixel Ratio (mobile devices often have high DPR)
+      const pixelRatio = window.devicePixelRatio || 1;
+      const hasHighDPR = pixelRatio > 2;
       
-      // Check device memory (mobile devices typically have less)
-      const deviceMemory = (navigator as any).deviceMemory;
-      const lowMemory = deviceMemory && deviceMemory <= 4;
+      // Check for mobile-specific APIs
+      const hasMobileAPIs = 'ondevicemotion' in window || 
+                            'ondeviceorientation' in window ||
+                            'ontouchstart' in document.documentElement;
       
-      // Combine all checks - block if ANY mobile indicator is present
-      const mobile = isMobileUA || 
-                     isMobilePlatform || 
-                     hasOrientation || 
-                     smallScreen ||
-                     viewportMismatch ||
-                     hasCoarsePointer ||
-                     (hasMobileTouch && (isMobileRatio || smallScreen)) ||
-                     (lowMemory && (isMobileUA || hasCoarsePointer));
+      // Connection type (mobile networks)
+      const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+      const isMobileConnection = connection && (connection.type === 'cellular' || /\d+g/.test(connection.effectiveType));
+      
+      // Hardware concurrency (mobile devices typically have fewer cores or lower reported)
+      const cores = navigator.hardwareConcurrency || 0;
+      const lowCores = cores > 0 && cores <= 8;
+      
+      // Device Memory
+      const memory = (navigator as any).deviceMemory;
+      const lowMemory = memory && memory <= 4;
+      
+      // Check if screen dimensions match common mobile resolutions
+      const commonMobileWidths = [320, 360, 375, 390, 393, 412, 414, 428, 768, 810, 820, 834, 1024];
+      const matchesMobileWidth = commonMobileWidths.some(w => 
+        Math.abs(screenWidth - w) < 5 || Math.abs(screenHeight - w) < 5
+      );
+      
+      // Aspect ratio check
+      const aspectRatio = maxDimension / minDimension;
+      const isMobileAspectRatio = aspectRatio > 1.5; // Phones are typically > 1.7
+      
+      // AGGRESSIVE: Block if ANY of these are true
+      const mobile = isMobileUA ||
+                     isMobilePlatform ||
+                     isCoarsePointer ||
+                     isAnyCoarsePointer ||
+                     hasSmallScreen ||
+                     hasSmallAvailScreen ||
+                     hasOrientationAPI ||
+                     hasMobileAPIs ||
+                     isMobileConnection ||
+                     (isTouchDevice && hasSmallScreen) ||
+                     (isTouchDevice && isMobileAspectRatio) ||
+                     (hasHighDPR && hasSmallScreen) ||
+                     (lowCores && isTouchDevice) ||
+                     (lowMemory && isTouchDevice) ||
+                     matchesMobileWidth;
+      
+      console.log('Mobile Detection Debug:', {
+        isMobileUA,
+        isMobilePlatform,
+        isTouchDevice,
+        isCoarsePointer,
+        isAnyCoarsePointer,
+        screenWidth,
+        screenHeight,
+        minDimension,
+        hasSmallScreen,
+        hasOrientationAPI,
+        hasMobileAPIs,
+        pixelRatio,
+        cores,
+        memory,
+        matchesMobileWidth,
+        aspectRatio,
+        FINAL_RESULT: mobile
+      });
       
       setIsMobile(mobile);
       setLoading(false);
     };
 
-    // Initial check with a small delay to ensure all properties are available
-    const timer = setTimeout(checkMobile, 100);
+    // Check immediately
+    checkMobile();
     
-    // Add event listeners
+    // Recheck on various events
     window.addEventListener('resize', checkMobile);
     window.addEventListener('orientationchange', checkMobile);
     
-    // Periodically recheck (in case user switches view mode)
-    const interval = setInterval(checkMobile, 2000);
+    // Aggressive recheck every second
+    const interval = setInterval(checkMobile, 1000);
     
     return () => {
-      clearTimeout(timer);
       clearInterval(interval);
       window.removeEventListener('resize', checkMobile);
       window.removeEventListener('orientationchange', checkMobile);
     };
   }, []);
 
-  // Show loading state briefly to prevent flash
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+        <div className="text-white text-xl">Verifying device...</div>
       </div>
     );
   }
@@ -114,14 +161,18 @@ export default function MobileBlocker({ children }: { children: React.ReactNode 
             </h1>
             <p className="text-gray-400 text-base leading-relaxed">
               This test portal requires a desktop computer for proper functionality and security. 
-              Mobile devices and tablet views are not supported.
+              Mobile devices, tablets, and desktop view on mobile browsers are not supported.
             </p>
           </div>
           
           <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-4">
             <p className="text-gray-300 text-sm">
-              Please access this portal using a laptop or desktop computer with a minimum screen resolution of 1024×600 pixels.
+              Please access this portal using a laptop or desktop computer with a minimum screen resolution of 1024×768 pixels.
             </p>
+          </div>
+          
+          <div className="text-xs text-gray-500 mt-4">
+            Device detected as mobile/tablet
           </div>
         </div>
       </div>
