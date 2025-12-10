@@ -5,38 +5,35 @@ export default function MobileBlocker({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const check = () => {
-      const mqPointerFine = window.matchMedia("(pointer: fine)").matches;
-      const mqHover = window.matchMedia("(hover: hover)").matches;
+    const checkDevice = () => {
+      let isMobile = false;
 
-      const hasRealMouse = mqPointerFine && mqHover;
+      // 🔥 MAIN STRONG CHECK — UNFAKEABLE
+      if (navigator.userAgentData && "mobile" in navigator.userAgentData) {
+        isMobile = navigator.userAgentData.mobile;
+      } else {
+        // Fallback for older browsers (less reliable)
+        isMobile = /android|iphone|ipad|ipod|mobile|tablet/i.test(navigator.userAgent);
+      }
 
-      // Keyboard heuristic: desktops usually report > 10 keys
-      const hasRealKeyboard = navigator.keyboard
-        ? true
-        : (navigator as any).keyboardLayoutMap
-        ? true
-        : window.navigator.maxTouchPoints === 0;
-
-      // Screen width requirement
+      // Require big screen too (prevents foldables/tablets)
       const wideEnough = window.innerWidth >= 1024;
 
-      // FINAL STRICT CHECK
-      const isDesktop = hasRealMouse && hasRealKeyboard && wideEnough;
+      const allowed = !isMobile && wideEnough;
 
-      setAllowed(isDesktop);
+      setAllowed(allowed);
       setLoading(false);
     };
 
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    checkDevice();
+    window.addEventListener("resize", checkDevice);
+    return () => window.removeEventListener("resize", checkDevice);
   }, []);
 
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black text-white flex items-center justify-center">
-        Verifying device…
+        Checking device…
       </div>
     );
   }
@@ -45,9 +42,11 @@ export default function MobileBlocker({ children }: { children: React.ReactNode 
     return (
       <div className="fixed inset-0 bg-black text-white flex items-center justify-center p-6 text-center">
         <div>
-          <h1 className="text-3xl font-bold mb-4">Desktop Only</h1>
-          <p>This portal cannot be accessed on mobile, tablet, or desktop-mode on mobile.</p>
-          <p className="mt-3 text-gray-400 text-sm">Please use a real laptop or desktop computer.</p>
+          <h1 className="text-3xl font-bold mb-4">Desktop Required</h1>
+          <p>This test can only be taken on a real desktop/laptop.</p>
+          <p className="text-gray-400 mt-3 text-sm">
+            Mobile phones, tablets, and desktop-mode on mobile are blocked.
+          </p>
         </div>
       </div>
     );
